@@ -1,0 +1,188 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ml_platform_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ml_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ml_network
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: ml_platform_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ml_network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: ml_platform_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - ml_network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml_platform_backend
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this_in_production}
+      
+      # Database
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ml_platform
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@postgres:5432/ml_platform
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      # MinIO
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      
+      # CORS
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8501,http://localhost:8000
+    
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: >
+      sh -c "python backend/init_db.py && 
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    networks:
+      - ml_network
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml_platform_celery
+    environment:
+      APP_ENV: production
+      DEBUG: "false"
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this_in_production}
+      
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ml_platform
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    volumes:
+      - .:/app
+    command: celery -A backend.tasks.celery_app worker --loglevel=info --concurrency=4
+    networks:
+      - ml_network
+
+  # Flower - Celery Monitoring
+  flower:
+    image: mher/flower:2.0.1
+    container_name: ml_platform_flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    networks:
+      - ml_network
+
+  # MLflow Server - Experiment Tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.10.0
+    container_name: ml_platform_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    networks:
+      - ml_network
+
+  # Streamlit Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ml_platform_frontend
+    ports:
+      - "8501:8501"
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+    networks:
+      - ml_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  mlflow_data:
+
+networks:
+  ml_network:
+    driver: bridge

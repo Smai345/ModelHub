@@ -1,0 +1,66 @@
+# IITG ML Platform - Production Dependencies
+
+# FastAPI & Web Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+python-jose==3.3.0
+passlib==1.7.4
+bcrypt==4.1.1
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Database & ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg==3.3.3
+psycopg[binary]==3.3.3
+
+# Async
+aiofiles==23.2.1
+aioredis==2.0.1
+
+# Redis / Caching
+redis==5.0.1
+
+# Celery - Task Queue
+celery==5.3.4
+flower==2.0.1
+
+# Data Processing & ML
+numpy==1.26.2
+pandas==2.1.3
+scikit-learn==1.3.2
+
+# MLflow - Experiment Tracking
+mlflow==2.10.0
+
+# MinIO - Object Storage
+minio==7.2.0
+
+# Logging & Monitoring
+structlog==23.3.0
+python-json-logger==2.0.7
+
+# API & Request Handling
+httpx==0.25.2
+requests==2.31.0
+
+# Rate Limiting & Security
+slowapi==0.1.9
+
+# Environment
+python-dotenv==1.0.0
+
+# CORS
+# (included with fastapi)
+
+# Development (optional, uncomment as needed)
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# pytest-cov==4.1.0
+# black==23.12.0
+# ruff==0.1.9
+# mypy==1.7.1
+# isort==5.13.2
