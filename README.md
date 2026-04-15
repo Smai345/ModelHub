@@ -382,12 +382,6 @@ mc mb minio/ml-datasets
 - Run: `python verify_startup.py`
 - Check PYTHONPATH includes project root
 
-## 📞 Support & Contact
-
-For questions or issues:
-- GitHub Issues: [Create an issue]
-- Email: support@iitg-ml.edu
-- Documentation: [Wiki]
 
 ## 📄 License
 
